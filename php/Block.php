@@ -63,33 +63,56 @@ class Block {
 	 * @return string The markup of the block.
 	 */
 	public function render_callback( $attributes, $content, $block ) {
+		global $post;
+		$post_id = $post->ID;
 		$post_types = get_post_types(  [ 'public' => true ] );
-		$class_name = $attributes['className'];
+		$class_name = isset($attributes['className'])?$attributes['className']:'';
 		ob_start();
-
 		?>
         <div class="<?php echo $class_name; ?>">
-			<h2>Post Counts</h2>
+			<h2><?php _e( 'Post Counts' , 'site-count'); ?></h2>
 			<ul>
-			<?php
-			foreach ( $post_types as $post_type_slug ) :
-                $post_type_object = get_post_type_object( $post_type_slug  );
-                $post_count = count(
-                    get_posts(
-						[
-							'post_type' => $post_type_slug,
-							'posts_per_page' => -1,
-						]
-					)
-                );
+				<?php
+				foreach ( $post_types as $post_type_slug ) :
+					$post_type_object = get_post_type_object( $post_type_slug  );
+					$post_count = count(
+						get_posts(
+							[
+								'post_type' => $post_type_slug,
+								'posts_per_page' => -1,
+							]
+						)
+					);
 
-				?>
-				<li><?php echo 'There are ' . $post_count . ' ' .
-					  $post_type_object->labels->name . '.'; ?></li>
-			<?php endforeach;	?>
-			</ul><p><?php echo 'The current post ID is ' . $_GET['post_id'] . '.'; ?></p>
+					?>
+					<li><?php printf( __( 'There are %d %s.', 'site-count' ),$post_count,$post_type_object->labels->name); ?></li>
+				<?php endforeach;	?>
+			</ul><p><?php printf( __( 'The current post ID is %d.', 'site-count' ),$post_id); ?></p>
 
 			<?php
+			//get Tags on the post and send it to query 
+			//The previous code was hardcoded that won't serve the result as per page plugin
+			$post_tags = get_the_tags($post_id);
+			$tag_slug = $tag_names = array();
+			if ( !empty($post_tags) ) {
+				foreach( $post_tags as $tag ) {
+					$tag_slug[] = $tag->slug; 
+					$tag_names[] = $tag->name;
+				}
+			}
+			$query_tags = implode(',',$tag_names);
+
+			//get Category name on the post and send it to query 
+			$category_detail=get_the_category($post_id);
+			$cat_ids = $cat_names = array();
+			if ( !empty($category_detail) ) {
+				foreach($category_detail as $category){
+					$cat_ids[] = $category->term_id;
+					$cat_names[] = $category->name;
+				}
+			}
+			$query_category_names = implode(',',$cat_names);
+			
 			$query = new WP_Query(  array(
 				'post_type' => ['post', 'page'],
 				'post_status' => 'any',
@@ -103,23 +126,33 @@ class Block {
 						'compare'=> '<=',
 					),
 				),
-                'tag'  => 'foo',
-                'category_name'  => 'baz',
-				  'post__not_in' => [ get_the_ID() ],
+                'tag_slug__in'  => $tag_slug,
+                'category__in'  => $cat_ids,
+				'post__not_in' => [ get_the_ID() ],
 			));
 
 			if ( $query->found_posts ) :
 				?>
-				 <h2>5 posts with the tag of foo and the category of baz</h2>
+				 <h2>
+					 <?php 
+					 _e( '5 posts' , 'site-count');
+					 if($query_tags !='')
+					 	printf( __( ' with the tag of %s', 'site-count' ),$query_tags); 
+					 if($query_tags !='' && $query_category_names != '')
+					 	_e( ' and ' , 'site-count');
+					 if($query_category_names != '')
+					 	printf( __( ' the category of %s.', 'site-count' ),$query_category_names); 
+					 ?>
+				 </h2>
                 <ul>
                 <?php
-
-                 foreach ( array_slice( $query->posts, 0, 5 ) as $post ) :
+                foreach ( array_slice( $query->posts, 0, 5 ) as $post ) :
                     ?><li><?php echo $post->post_title ?></li><?php
 				endforeach;
 			endif;
 		 	?>
-			</ul>
+				</ul>
+			
 		</div>
 		<?php
 
